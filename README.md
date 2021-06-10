@@ -36,3 +36,8 @@ and you should be able to run all the tests (assume the working directory is in 
 python hiDF/hiDFtest/test.py
 ```
 
+#### Result of Adult Dataset
+```
+Accuracy: 86.90 ± 0.05  
+F1:    86.43 ± 0.07
+```
