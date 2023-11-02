@@ -16,7 +16,7 @@ from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier, DecisionTr
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, VotingClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.utils import resample, shuffle
-from sklearn.datasets import load_iris, load_breast_cancer, load_digits, load_boston , \
+from sklearn.datasets import load_iris, load_breast_cancer, load_digits, \
                             fetch_olivetti_faces, fetch_20newsgroups_vectorized, fetch_covtype , fetch_rcv1, fetch_20newsgroups, \
                             make_spd_matrix
 
