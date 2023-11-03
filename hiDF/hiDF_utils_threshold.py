@@ -58,12 +58,16 @@ def get_rit_tree_data(all_rf_tree_data,
     all_rit_tree_outputs = {}
     
     # Create the weighted randomly sampled paths as a generator
+    # 这个gen_random_leaf_paths是一个生成器
+    # 每次调用next(gen_random_leaf_paths)都会返回一个list，list中的元素是tuple，tuple的元素是feature_id, 'L'/'R', threshold
     gen_random_leaf_paths = generate_rit_samples(
         all_rf_tree_data=all_rf_tree_data,
         bin_class_type=bin_class_type)
 
+    # 构建M棵RIT树
     for idx, rit_tree in enumerate(range(M)):
         # Create the RIT object
+        # 构建RIT树，这个函数是递归的
         rit = build_tree_threshold(feature_paths=gen_random_leaf_paths,
                          max_depth=max_depth,
                          noisy_split=noisy_split,
@@ -339,6 +343,7 @@ class RITTree2(RITNode2):
                 #
 
 
+# 这个函数是递归构建RIT树，递归调用是通过将函数转为partial函数实现的
 def build_tree_threshold(feature_paths, max_depth=3,
                num_splits=5, noisy_split=False,
                _parent=None,
@@ -371,11 +376,14 @@ def build_tree_threshold(feature_paths, max_depth=3,
                     Machine Learning Research 15.1 (2014): 629-654.
     """
 
+    # partial 函数是固定某些参数的函数，返回一个新的函数，新的函数不用再传入固定的参数了
     expand_tree = partial(build_tree_threshold, feature_paths,
                           max_depth=max_depth,
                           num_splits=num_splits,
                           noisy_split=noisy_split)
 
+    # feature_path是一个随机生成器
+    # 每次调用next(feature_path)都会返回一个list，list中的元素是tuple，tuple的元素是feature_id, 'L'/'R', threshold
     if _parent is None:
         tree = RITTree2(next(feature_paths))
         expand_tree(_parent=tree, _depth=0)
@@ -1115,14 +1123,14 @@ class gcForest_hi:
         ## hiDF parameters...
         use_RIT = False,
         new_feature_limit = 6,
-        B=10,
+        B=10, # B为随机森林的个数
         n_estimators_bootstrap=10,  ## old:5 , maybe too small
         signed=True,
         threshold=True,
         propn_n_samples=0.5,  # 0.5
         stability_threshold = 0.5, 
         bin_class_type=None,
-        M=20,  # 10/20
+        M=20,  # 10/20 M为RIT树的个数
         max_depth_RIT=4,  # 4/5
         noisy_split=False,
         num_splits=2
@@ -1149,14 +1157,14 @@ class gcForest_hi:
         ## RIT 
         self.use_RIT = use_RIT
         self.new_feature_limit = new_feature_limit
-        self.B=B
+        self.B=B # B为随机森林的个数
         self.n_estimators_bootstrap=n_estimators_bootstrap
         self.signed=signed
         self.threshold=threshold
         self.propn_n_samples=propn_n_samples  
         self.stability_threshold =stability_threshold
         self.bin_class_type=bin_class_type
-        self.M=M
+        self.M=M # M为RIT树的个数
         self.max_depth_RIT=max_depth_RIT
         self.noisy_split=noisy_split
         self.num_splits=num_splits
@@ -1273,10 +1281,13 @@ class gcForest_hi:
                 ##  
                 print('  Start bootstrap, RIT...')
                 bootstrap_feature_importance = np.zeros( (X_train.shape[1] , ) )
+
+                # 构建B个随机森林，通过每个随机森林又要构建M个RIT
                 for b in range(self.B):
 
                     X_train_rsmpl, y_rsmpl = resample( X_train, y_train, replace=False, n_samples=n_samples ) #, stratify = y_train)
 
+                    # rf_bootstrap是一个随机森林
                     rf_bootstrap = RandomForestClassifierWithWeights(n_estimators=self.n_estimators_bootstrap, n_jobs=-1 )
                 
                     # Fit RF(w(K)) on the bootstrapped dataset
@@ -1284,7 +1295,9 @@ class gcForest_hi:
 
                     bootstrap_feature_importance += rf_bootstrap.feature_importances_
 
-                    
+                    # 获取随机森林中的所有树的数据，包括树的结构，叶子节点的信息等
+                    # 还有每棵树的决策路径
+                    # 和随机森林的特征重要性、特征重要性方差、特征重要性的排序索引
                     all_rf_tree_data = get_rf_tree_data(  rf=rf_bootstrap, X_train=X_train_rsmpl,  X_test=X_test, y_test=y_test,
                         signed=self.signed,  threshold= self.threshold )
 

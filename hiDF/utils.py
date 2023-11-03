@@ -349,6 +349,9 @@ def get_rf_tree_data(rf, X_train, X_test, y_test, signed=False , threshold=False
     as a convenient dictionary format
     """
 
+    # 以下是保存 随机森林 而不是 随机森林中每棵树 的 特征重要性、特征重要性方差、特征重要性的排序索引
+    # 特征的重要性通过在树中使用的特征的MDI*该节点的样本数来定义
+    # 那么也会导致具有共线性的特征一个重要性值很高，而其他的重要性值很低
     # random forest feature importances i.e. next iRF iteration weights
     feature_importances = rf.feature_importances_
 
@@ -371,6 +374,9 @@ def get_rf_tree_data(rf, X_train, X_test, y_test, signed=False , threshold=False
                            feature_importances_rank_idx}
 
     # CHECK: Ask SVW if the following should be paralellized!
+    # 这是保存每棵树的所有信息，包括树的结构、树的路径、树的叶子节点、树的叶子节点的样本数、树的叶子节点的样本数占比
+    # 以及每棵树的决策路径
+    # 以及森林的特征重要性、特征重要性方差、特征重要性的排序索引
     for idx, dtree in enumerate(rf.estimators_):
         dtree_out = get_tree_data(X_train=X_train,
                                   X_test=X_test,
@@ -383,9 +389,11 @@ def get_rf_tree_data(rf, X_train, X_test, y_test, signed=False , threshold=False
         # Append output to our combined random forest outputs dict
         all_rf_tree_outputs["dtree{}".format(idx)] = dtree_out
 
+    # 返回的是一个字典，包含了随机森林中每棵树的所有信息，和森林的特征重要性、特征重要性方差、特征重要性的排序索引
     return all_rf_tree_outputs
 
-
+# 这个函数保存了树的所有信息，包括树的结构、树的路径、树的叶子节点、树的叶子节点的样本数、树的叶子节点的样本数占比
+# 以及树的决策路径
 def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, threshold=False):
     """
         This returns all of the required summary results from an
@@ -495,26 +503,31 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
 
     # Get list of leaf nodes
     # In all paths it is the final node id
+    # 找出所有的叶子节点
     if not signed:
         all_leaf_nodes = [path[-1] for path in all_leaf_node_paths]
     else:
         all_leaf_nodes = [path[-1][0] for path in all_leaf_node_paths]
 
     # Get the total number of training samples used in each leaf node
+    # 找出所有叶子节点的样本数
     all_leaf_node_samples = [n_node_samples[node_id].astype(int)
                              for node_id in all_leaf_nodes]
 
     # Get proportion of training samples used in each leaf node
     # compared to the training samples used in the root node
+    # 所有叶子节点的样本数占比， 通过已求出的样本数/根节点样本数得到
     all_leaf_node_samples_percent = [
         100. * n_leaf_node_samples / root_n_node_samples
         for n_leaf_node_samples in all_leaf_node_samples]
 
     # Final predicted values in each class at each leaf node
+    # 找出所有叶子结点的类数量
     all_leaf_node_values = [value[node_id].astype(
         int) for node_id in all_leaf_nodes]
 
     # Scaled values of the leaf nodes in each of the binary classes
+    # 找出所有叶子节点的类数量占总的样本数的比例
     all_scaled_leaf_node_values = [value / X_train_n_samples
                                    for value in all_leaf_node_values]
 
@@ -525,10 +538,12 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
 
     # All leaf node depths
     # The depth is 0 indexed i.e. root node has depth 0
+    # 找出所有叶子节点的深度，通过已求出的路径长度-1得到
     leaf_nodes_depths = [np.size(path) - 1 for path in all_leaf_node_paths]
 
     # Predicted Classes
     # Check that we correctly account for ties in determining the class here
+    # 求出所有叶子节点的预测类
     all_leaf_node_classes = [ np.argmax(value) for value in all_leaf_node_values]
 
 
@@ -536,6 +551,7 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
     # CHECK: Why does the leaf node have a feature associated with it?
     # Investigate further
     # Removed the final leaf node value so that this feature does not get included currently
+    # 保存每条路径的特征，不包括叶子节点，因为叶子结点没有分裂特征
     if not signed:
         all_leaf_paths_features = [node_features_idx[path[:-1]]
                                     for path in all_leaf_node_paths]
@@ -609,22 +625,23 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
 
     # Dictionary of all tree values
     tree_data = {
-                "num_features_used": num_features_used,
-                 "node_features_idx": node_features_idx,
-                 "max_node_depth": max_node_depth,
-                 "n_nodes": n_nodes,
-                 "all_leaf_node_paths": all_leaf_node_paths,
-                 "all_leaf_nodes": all_leaf_nodes,
-                 "leaf_nodes_depths": leaf_nodes_depths,
-                 "all_leaf_node_samples": all_leaf_node_samples,
+                "num_features_used": num_features_used, # 用到的特征数
+                 "node_features_idx": node_features_idx, # 每个节点使用到的特征id
+                 "max_node_depth": max_node_depth, # 树的最大深度
+                 "n_nodes": n_nodes, # 节点数
+                 "all_leaf_node_paths": all_leaf_node_paths, # 记录所有叶子节点的路径，通过自顶向下添加路径的中间节点的方式来保存路径
+                 "all_leaf_nodes": all_leaf_nodes, # 记录所有的叶子节点
+                 "leaf_nodes_depths": leaf_nodes_depths, # 记录所有的叶子节点的深度，通过已求出的路径长度-1得到
+                 "all_leaf_node_samples": all_leaf_node_samples, # 记录所有叶子节点的样本数，通过dtree.tree_.n_node_samples[node_id]得到
+                                                                 # 也可以通过np.sum(tree_.value[node_id])得到吧？
                  "all_leaf_node_samples_percent":
-                 all_leaf_node_samples_percent,
-                 "all_leaf_node_values": all_leaf_node_values,
-                 "all_scaled_leaf_node_values": all_scaled_leaf_node_values,
-                 "tot_leaf_node_values": tot_leaf_node_values,
-                 "all_leaf_node_classes": all_leaf_node_classes,
-                 "all_leaf_paths_features": all_leaf_paths_features,
-                 "all_uniq_leaf_paths_features": all_uniq_leaf_paths_features,
+                 all_leaf_node_samples_percent, # 记录所有叶子节点的样本数占比， 通过每个叶子结点的样本数/根节点样本数得到
+                 "all_leaf_node_values": all_leaf_node_values, # 记录所有叶子节点的类数量，通过dtree.tree_.value[node_id]得到
+                 "all_scaled_leaf_node_values": all_scaled_leaf_node_values, # 记录所有叶子节点的类数量占总的样本数的比例，通过已求出的类数量/总样本数得到
+                 "tot_leaf_node_values": tot_leaf_node_values, # 记录所有叶子节点的样本数量吧？通过np.sum(tree_.value[node_id])得到
+                 "all_leaf_node_classes": all_leaf_node_classes, # 记录所有叶子节点的预测类id，通过np.argmax(tree_.value[node_id])得到
+                 "all_leaf_paths_features": all_leaf_paths_features, # 记录所有路径的分裂特征，通过已求出的路径得到
+                 "all_uniq_leaf_paths_features": all_uniq_leaf_paths_features, # 记录所有路径所使用到的特征，特征不重复
                  #"validation_metrics": validation_metrics
                  }
     return tree_data
