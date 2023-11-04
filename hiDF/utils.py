@@ -552,9 +552,12 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
     # Investigate further
     # Removed the final leaf node value so that this feature does not get included currently
     # 保存每条路径的特征，不包括叶子节点，因为叶子结点没有分裂特征
+
+    # 没有 signed的就是只有路径使用到的特征
     if not signed:
         all_leaf_paths_features = [node_features_idx[path[:-1]]
                                     for path in all_leaf_node_paths]
+    # 没有threshold就是只有路径使用到的特征和方向
     elif not threshold:
         all_leaf_paths_features = []
         for path in all_leaf_node_paths:
@@ -563,6 +566,7 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
             for elem in all_but_last:
                 temp.append((node_features_idx[elem[0]], elem[1]))
             all_leaf_paths_features += [temp]
+    # 有signed和threshold就是只有路径使用到的特征和方向和阈值
     else:
         all_leaf_paths_features = []
         for path in all_leaf_node_paths:
@@ -587,6 +591,7 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
                 temp.append(rich_feature_node[0])
             all_leaf_paths_features_poor += [temp]
 
+        # 现在的signed的richpath的unique是如果一次路径使用到多次同一个特征，只保留第一次的使用信息
         all_uniq_leaf_paths_features = []
         for poor_feature_path, rich_feature_path in zip( all_leaf_paths_features_poor, all_leaf_paths_features) :
             _ , unique_indices = np.unique( poor_feature_path, return_index=True )
@@ -605,6 +610,7 @@ def get_tree_data(X_train, X_test, y_test, dtree, root_node_id=0, signed=False, 
     # NOTE: This removes the original ordering of the features along the path
     # The original ordering could be preserved using a special function but
     # will increase runtime
+    # 用 str(feature_id) + 'L/R' 来做unique操作
     ## Original unique paths
     # if signed:
     #     new_all_leaf_paths_features = []

@@ -80,7 +80,8 @@ def get_rit_tree_data(all_rf_tree_data,
         # Leaf node values i.e. final intersected features
         rit_leaf_node_values = [node[1]._val for node in rit.leaf_nodes()]
 
-        
+        # 对每个rit树，记录rit树结构、节点信息、叶节点信息
+        # 每个节点信息包括节点编号、节点Node类
         rit_output = {"rit": rit,
                       "rit_intersected_values": rit_intersected_values,
                       "rit_leaf_node_values": rit_leaf_node_values,
@@ -96,6 +97,7 @@ def get_rit_tree_data(all_rf_tree_data,
 # Filter Comprehension helper function
 
 
+# 是filter_leaves_classifier的辅助函数,负责从字典中取出需要的值
 def _dtree_filter_comp(dtree_data,
                        filter_key,
                        bin_class_type):
@@ -130,9 +132,11 @@ def _dtree_filter_comp(dtree_data,
     dtree_values = dtree_data[filter_key]
 
     # Filter based on the specific value of the leaf node classes
+    # 'all_leaf_node_classes' 是每个叶节点的预测类
     leaf_node_classes = dtree_data['all_leaf_node_classes']
 
     # perform the filtering and return list
+    # 如果bin_class_type为None，则返回所有叶节点的值，如果有bin_class_type，则返回指定类别的叶节点的值
     return [i for i, j in zip(dtree_values,
                               leaf_node_classes)
             if bin_class_type is None or j == bin_class_type]
@@ -169,12 +173,15 @@ def filter_leaves_classifier(dtree_data,
     # Get Filtered values by specified binary class
 
     # unique feature paths from root to leaf node
+    # 这个是为了找到每个叶节点的路径所使用到的特征
     uniq_feature_paths = filter_comp(filter_key='all_uniq_leaf_paths_features')
 
     # total number of training samples ending up at each node
+    # 这个是为了找到每个叶节点的样本数量
     tot_leaf_node_values = filter_comp(filter_key='tot_leaf_node_values')
 
     # depths of each of the leaf nodes
+    # 这个是为了找到每个叶节点的深度
     leaf_nodes_depths = filter_comp(filter_key='leaf_nodes_depths')
 
     # validation metrics for the tree
@@ -190,6 +197,7 @@ def filter_leaves_classifier(dtree_data,
     return all_filtered_outputs
 
 
+# 这个函数是从一个森林中的所有路径中随机抽取路径，根据路径的样本数量作为概率权重，调用一次next()就抽取一个路径
 def weighted_random_choice(values, weights):
     """
     Discrete distribution, drawing values with the frequency
@@ -207,12 +215,16 @@ def weighted_random_choice(values, weights):
 
     weights = np.array(weights)
     # normalize the weights
+    # 将权重归一化，这样所有权重的和为1。这一步是必要的，因为随机抽样函数需要归一化的概率分布。
     weights = weights / weights.sum()
+    # 创建一个离散随机变量，这个随机变量的概率分布由weights给出。values参数为随机变量可能取值的范围。
     dist = stats.rv_discrete(values=(range(len(weights)), weights))
     #FIXME this part should be improved by assigning values directly
     #    to the stats.rv_discrete function.  -- Yu
 
+    # 无限循环，生成器会一直运行，每次被调用时都会返回一个值。
     while True:
+        # 使用rvs()方法从上面创建的离散随机变量分布中随机取样一个索引，然后根据这个索引从values列表中返回对应的值。
         yield values[dist.rvs()]
 
 
@@ -225,10 +237,13 @@ def generate_rit_samples(all_rf_tree_data, bin_class_type=None , return_path_and
     all_weights = []
     all_paths = []
     for dtree in range(n_estimators):
+        # filtered返回了一个字典，字典中包含了所有叶节点的路径，样本数量，深度，可以根据bin_class_type来过滤，只找出指定类别的叶节点
         filtered = filter_leaves_classifier(
             dtree_data=all_rf_tree_data['dtree{}'.format(dtree)],
             bin_class_type=bin_class_type)
-        
+
+        # 将一个森林中的所有树的叶节点样本数量和路径都放到一个列表中
+        # 将叶节点的样本数量作为权重
         all_weights.extend(filtered['tot_leaf_node_values']) 
         all_paths.extend(filtered['uniq_feature_paths'])
 
@@ -259,6 +274,7 @@ class RITNode2(object):
         self._children = []
         #print('  Init node:', val)
         if( len(self._val) != 0 ):
+            # val[0] 是路径的第一个节点，也就是之前随机森林中的一棵树的根节点，有可能只有一个元素就是特征，也有可能有三个元素+特征，分别是特征，'L'/'R'，阈值
             self._tuple_size = len(val[0]) if ( type(val[0]) is tuple or type(val[0]) is list ) else 1
         else:
             self._tuple_size = -1
@@ -274,12 +290,14 @@ class RITNode2(object):
         if self._tuple_size == -1:
             warnings.warn( "In RIT building: You are trying to add child to a already empty RITNode.  Do nothing ", RuntimeWarning )
             return -1
-        
+
+        # 如果每个路径只保存特征，那么直接查看两个路径所使用到的重复的特征
         if self._tuple_size == 1:
             val_intersect = np.intersect1d(self._val, val)
             
         else:
-            
+            # 如果每个路径保存了特征，'L'/'R'
+            # 就对每条路径首次使用某个特征的L/R进行intersect，求出共同使用的特征和方向
             poor_val = [ str(node[0])+node[1] for node in val ]
             poor_self_val = [ str(node[0])+node[1] for node in self._val ]
             
@@ -316,6 +334,7 @@ class RITNode2(object):
         return len(self._children) + \
             sum(child.nr_children for child in self._children)
 
+    # yield from语句是代码中如果还有yield语句，那么就会一直执行直到没有yield语句为止，这样可以实现递归返回一个列表
     def _traverse_depth_first(self, _idx):
         ## : generate a 2-element tuple : (id , RITNode)
         yield _idx[0], self
@@ -384,6 +403,7 @@ def build_tree_threshold(feature_paths, max_depth=3,
 
     # feature_path是一个随机生成器
     # 每次调用next(feature_path)都会返回一个list，list中的元素是tuple，tuple的元素是feature_id, 'L'/'R', threshold
+    # 这里的特征路径，如果一条路使用了多次同一个特征，只会出现首次的使用信息，无论feature_path保存了1、2或3个元素
     if _parent is None:
         tree = RITTree2(next(feature_paths))
         expand_tree(_parent=tree, _depth=0)
@@ -1307,6 +1327,8 @@ class gcForest_hi:
                     # Run RIT on the interaction rule set
                     # CHECK - each of these variables needs to be passed into
                     # the main run_rit function
+
+                    # 保存当前森林的RITs
                     all_rit_tree_data = get_rit_tree_data(
                         all_rf_tree_data=all_rf_tree_data, bin_class_type=self.bin_class_type,
                         M=self.M, max_depth=self.max_depth_RIT, noisy_split=self.noisy_split, num_splits=self.num_splits)
@@ -1315,6 +1337,8 @@ class gcForest_hi:
                     # We will reference the RIT for a particular rf bootstrap
                     # using the specific bootstrap id - consistent with the
                     # rf bootstrap output data
+
+                    # 每个森林的RITs都保存在这
                     all_rit_bootstrap_output['rf_bootstrap{}'.format(
                         b)] = all_rit_tree_data
 
