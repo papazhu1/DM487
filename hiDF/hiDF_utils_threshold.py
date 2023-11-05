@@ -262,7 +262,7 @@ def select_random_path():
         yield XX[np.random.randint(low=0, high=len(XX))]
 
 
-
+# 这里继承object类，在python3中其实不写也默认继承object类
 class RITNode2(object):
     """
     A helper class used to construct the RIT Node
